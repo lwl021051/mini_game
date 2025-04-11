@@ -78,6 +78,7 @@
     let npcSpeed = npcBaseSpeed;
 
     let killCount = 0;
+    let gameOver = false;
 
     const keys = {};
 
@@ -87,6 +88,7 @@
     const directions = {down: 2, left: 1, up: 0, right: 3};
 
     function fireSand() {
+        if (gameOver) return;
         const now = Date.now();
         if (now - lastFireTime > fireCooldown) {
             lastFireTime = now;
@@ -111,7 +113,10 @@
     }
 
     function update() {
-        if (player.health <= 0) return;
+        if (player.health <= 0) {
+            gameOver = true;
+            return;
+        }
 
         let moved = false;
         if (keys['w']) {
@@ -242,7 +247,9 @@
     }
 
     canvas.addEventListener('mousedown', e => handleClick(e, true));
-    canvas.addEventListener('mouseup', () => { for (let key in keys) keys[key] = false; });
+    canvas.addEventListener('mouseup', () => {
+        for (let key in keys) keys[key] = false;
+    });
 
     canvas.addEventListener('touchstart', e => {
         e.preventDefault();
@@ -344,6 +351,8 @@
         ctx.globalAlpha = 0.6;
         ctx.fillStyle = '#888';
         for (let name in buttons) {
+            if (name === 'restart' && !gameOver) continue; // <--- 只有 gameOver 才顯示 restart
+
             const b = buttons[name];
             ctx.fillRect(b.x, b.y, b.w, b.h);
             ctx.fillStyle = '#fff';
@@ -372,6 +381,7 @@
         sands.length = 0;
         npcs = [];
         killCount = 0;
+        gameOver = false; // <--- 重啟遊戲，遊戲狀態回復
 
         for (let i = 0; i < 20; i++) {
             npcs.push(createNPC());
