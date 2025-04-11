@@ -214,48 +214,10 @@
         left: {x: 10, y: 330, w: 40, h: 40, key: 'a'},
         right: {x: 90, y: 330, w: 40, h: 40, key: 'd'},
         attack: {x: 320, y: 330, w: 60, h: 40, key: 'k'},
-        restart: {x: 140, y: 180, w: 120, h: 40}
+        restart: {x: 140, y: 180, w: 120, h: 40, key: null} // ✅ 修正這裡
     };
 
-    canvas.addEventListener('mousedown', handleClick);
-    canvas.addEventListener('touchstart', (e) => {
-        e.preventDefault();
-        const rect = canvas.getBoundingClientRect();
-
-        for (let i = 0; i < e.touches.length; i++) {
-            const touch = e.touches[i];
-            const x = touch.clientX - rect.left;
-            const y = touch.clientY - rect.top;
-
-            for (let name in buttons) {
-                const btn = buttons[name];
-                if (x >= btn.x && x <= btn.x + btn.w && y >= btn.y && y <= btn.y + btn.h) {
-                    if (name === 'restart') {
-                        restartGame();
-                    } else if (btn.key === 'k') {
-                        fireSand();
-                    } else {
-                        keys[btn.key] = true;
-                    }
-                }
-            }
-        }
-    }, {passive: false});
-
-    canvas.addEventListener('touchend', (e) => {
-        for (let key in keys) keys[key] = false;
-    });
-    canvas.addEventListener('touchcancel', (e) => {
-        for (let key in keys) keys[key] = false;
-    });
-
-    canvas.addEventListener('mousedown', (e) => {
-        handleClick(e, true);
-    });
-    canvas.addEventListener('mouseup', (e) => {
-        for (let key in keys) keys[key] = false;
-    });
-
+    const activeTouches = {};
 
     function handleClick(e, isMouseDown = false) {
         const rect = canvas.getBoundingClientRect();
@@ -269,7 +231,7 @@
                     restartGame();
                 } else if (btn.key === 'k') {
                     fireSand();
-                } else {
+                } else if (btn.key) {
                     keys[btn.key] = true;
                     if (!isMouseDown) {
                         setTimeout(() => keys[btn.key] = false, 200);
@@ -279,6 +241,53 @@
         }
     }
 
+    canvas.addEventListener('mousedown', e => handleClick(e, true));
+    canvas.addEventListener('mouseup', () => { for (let key in keys) keys[key] = false; });
+
+    canvas.addEventListener('touchstart', e => {
+        e.preventDefault();
+        const rect = canvas.getBoundingClientRect();
+
+        for (let i = 0; i < e.changedTouches.length; i++) {
+            const touch = e.changedTouches[i];
+            const x = touch.clientX - rect.left;
+            const y = touch.clientY - rect.top;
+
+            for (let name in buttons) {
+                const btn = buttons[name];
+                if (x >= btn.x && x <= btn.x + btn.w && y >= btn.y && y <= btn.y + btn.h) {
+                    if (name === 'restart') {
+                        restartGame();
+                    } else if (btn.key === 'k') {
+                        fireSand();
+                    } else if (btn.key) {
+                        keys[btn.key] = true;
+                        activeTouches[touch.identifier] = btn.key;
+                    }
+                }
+            }
+        }
+    }, {passive: false});
+
+    canvas.addEventListener('touchend', e => {
+        for (let i = 0; i < e.changedTouches.length; i++) {
+            const key = activeTouches[e.changedTouches[i].identifier];
+            if (key) {
+                keys[key] = false;
+                delete activeTouches[e.changedTouches[i].identifier];
+            }
+        }
+    });
+
+    canvas.addEventListener('touchcancel', e => {
+        for (let i = 0; i < e.changedTouches.length; i++) {
+            const key = activeTouches[e.changedTouches[i].identifier];
+            if (key) {
+                keys[key] = false;
+                delete activeTouches[e.changedTouches[i].identifier];
+            }
+        }
+    });
 
     function draw() {
         const camX = Math.max(0, Math.min(player.x - VIEW_WIDTH / 2, MAP_WIDTH - VIEW_WIDTH));
