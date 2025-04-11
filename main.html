@@ -34,10 +34,10 @@
     const fireCooldown = 200;
 
     const chickenWalk = new Image();
-    chickenWalk.src = 'chicken_walk.png';
+    chickenWalk.src = 'chicken_walk.png'; // Make sure this exists
 
     const npcImage = new Image();
-    npcImage.src = 'npc_image.png';
+    npcImage.src = 'npc_image.png'; // Make sure this exists
 
     let VIEW_WIDTH = window.innerWidth;
     let VIEW_HEIGHT = window.innerHeight;
@@ -46,11 +46,11 @@
     canvas.height = VIEW_HEIGHT;
 
     const joystick = {
-        baseX: 0,
-        baseY: 0,
-        radius: 75, // Outer joystick radius
-        knobX: 0,
-        knobY: 0,
+        baseX: canvas.width * 0.35,
+        baseY: canvas.height * 0.85,
+        radius: 75,
+        knobX: canvas.width * 0.35,
+        knobY: canvas.height * 0.85,
         active: false,
         touchId: null,
     };
@@ -91,8 +91,7 @@
     window.addEventListener('resize', resizeCanvas);
     resizeCanvas();
 
-    const directions = {down: 2, left: 1, up: 0, right: 3};
-    const keys = {};
+    const directions = {up: 0, left: 1, down: 2, right: 3};
     const sands = [];
     const npcs = [];
     let player = {};
@@ -142,11 +141,6 @@
             const dy = joystick.knobY - joystick.baseY;
 
             let angle = Math.atan2(dy, dx);
-            if (Math.abs(dx) > Math.abs(dy)) {
-                angle = dx > 0 ? Math.PI / 2 : -Math.PI / 2;
-            } else {
-                angle = dy > 0 ? Math.PI : 0;
-            }
 
             sands.push({
                 x: player.x + player.width / 2 - 4,
@@ -174,28 +168,30 @@
         const dy = joystick.knobY - joystick.baseY;
         const angle = Math.atan2(dy, dx);
 
-        // Move player based on joystick direction
-        if (Math.abs(dx) > 0 || Math.abs(dy) > 0) {
+        const threshold = 10;
+
+        if (Math.abs(dx) > threshold || Math.abs(dy) > threshold) {
             const movement = Math.min(Math.sqrt(dx * dx + dy * dy), joystick.radius);
-            const normDx = Math.cos(angle);
-            const normDy = Math.sin(angle);
-
-            player.x += normDx * player.speed * (movement / joystick.radius);
-            player.y += normDy * player.speed * (movement / joystick.radius);
-
-            if (Math.abs(normDx) > Math.abs(normDy)) {
-                player.direction = normDx > 0 ? 'right' : 'left';
-            } else {
-                player.direction = normDy > 0 ? 'down' : 'up';
-            }
-
+            player.x += Math.cos(angle) * player.speed * (movement / joystick.radius);
+            player.y += Math.sin(angle) * player.speed * (movement / joystick.radius);
             moved = true;
+
+            // Set direction
+            if (Math.abs(dx) > Math.abs(dy)) {
+                player.direction = dx > 0 ? 'right' : 'left';
+            } else {
+                player.direction = dy > 0 ? 'down' : 'up';
+            }
         }
 
         if (moved) {
             player.frameTick++;
-            if (player.frameTick % 10 === 0) player.frame = (player.frame + 1) % FRAMES_PER_DIRECTION;
-        } else player.frame = 0;
+            if (player.frameTick % 10 === 0) {
+                player.frame = (player.frame + 1) % FRAMES_PER_DIRECTION;
+            }
+        } else {
+            player.frame = 0;
+        }
 
         player.x = Math.max(0, Math.min(MAP_WIDTH - TILE_SIZE, player.x));
         player.y = Math.max(0, Math.min(MAP_HEIGHT - TILE_SIZE, player.y));
@@ -253,7 +249,7 @@
     function drawJoystick() {
         if (!joystick.active) return;
         ctx.beginPath();
-        ctx.arc(joystick.baseX, joystick.baseY, joystick.radius, 0, Math.PI * 2); // Reduced joystick radius to original size
+        ctx.arc(joystick.baseX, joystick.baseY, joystick.radius, 0, Math.PI * 2);
         ctx.fillStyle = "rgba(255,255,255,0.2)";
         ctx.fill();
         ctx.beginPath();
@@ -331,10 +327,28 @@
         drawJoystick();
     }
 
-    canvas.addEventListener('mousedown', e => handleClick(e, true));
-    canvas.addEventListener('mouseup', () => {
-        for (let key in keys) keys[key] = false;
-    });
+    function handleClick(e, isTouch = false) {
+        e.preventDefault();
+        const rect = canvas.getBoundingClientRect();
+        const clientX = isTouch ? e.touches[0].clientX : e.clientX;
+        const clientY = isTouch ? e.touches[0].clientY : e.clientY;
+        const x = clientX - rect.left;
+        const y = clientY - rect.top;
+
+        if (buttons.attack.x < x && x < buttons.attack.x + buttons.attack.w &&
+            buttons.attack.y < y && y < buttons.attack.y + buttons.attack.h) {
+            fireSand();
+        }
+
+        if (buttons.restart.x < x && x < buttons.restart.x + buttons.restart.w &&
+            buttons.restart.y < y && y < buttons.restart.y + buttons.restart.h) {
+            restartGame();
+        }
+    }
+
+    // Touch + mouse support
+    canvas.addEventListener('mousedown', e => handleClick(e, false));
+    canvas.addEventListener('touchstart', e => handleClick(e, true));
     canvas.addEventListener('touchstart', e => {
         for (const touch of e.touches) {
             const dx = touch.clientX - joystick.baseX;
@@ -347,6 +361,7 @@
             }
         }
     });
+
     canvas.addEventListener('touchmove', e => {
         for (const touch of e.touches) {
             if (touch.identifier === joystick.touchId) {
@@ -355,6 +370,7 @@
             }
         }
     });
+
     canvas.addEventListener('touchend', e => {
         for (const touch of e.changedTouches) {
             if (touch.identifier === joystick.touchId) {
@@ -363,22 +379,8 @@
         }
     });
 
-    function handleClick(e, isTouch = false) {
-        const rect = canvas.getBoundingClientRect();
-        const x = isTouch ? e.touches[0].clientX - rect.left : e.clientX - rect.left;
-        const y = isTouch ? e.touches[0].clientY - rect.top : e.clientY - rect.top;
-
-        if (buttons.attack.x < x && x < buttons.attack.x + buttons.attack.w && buttons.attack.y < y && y < buttons.attack.y + buttons.attack.h) {
-            fireSand();
-        }
-        if (buttons.restart.x < x && x < buttons.restart.x + buttons.restart.w && buttons.restart.y < y && y < buttons.restart.y + buttons.restart.h) {
-            restartGame();
-        }
-    }
-
     function gameLoop() {
         if (gameOver) return;
-
         update();
         draw();
         requestAnimationFrame(gameLoop);
