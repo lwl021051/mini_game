@@ -1,25 +1,21 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Pixel RPG Game</title>
-    <style>
-        html, body {
-            margin: 0;
-            padding: 0;
-            overflow: hidden;
-            touch-action: none;
-            height: 100%;
-            width: 100%;
-            background: #000;
-        }
+<style>
+  body, html {
+    margin: 0;
+    padding: 0;
+    overflow: hidden;
+    touch-action: none;
+  }
 
-        canvas {
-            display: block;
-            background: #222;
-            image-rendering: pixelated;
-        }
-    </style>
+  canvas {
+    display: block;
+    background: #111;
+  }
+</style>
 </head>
 <body>
 <canvas id="gameCanvas" width="400" height="400"></canvas>
@@ -27,6 +23,28 @@
 <script>
     const canvas = document.getElementById('gameCanvas');
     const ctx = canvas.getContext('2d');
+
+    function resizeCanvas() {
+        canvas.width = window.innerWidth;
+        canvas.height = window.innerHeight;
+
+        // 動態更新按鈕位置和大小（這裡用比例）
+        const btnSize = Math.min(canvas.width, canvas.height) / 8;
+        buttons.up = {x: canvas.width - btnSize * 2, y: canvas.height - btnSize * 3, w: btnSize, h: btnSize};
+        buttons.down = {x: canvas.width - btnSize * 2, y: canvas.height - btnSize, w: btnSize, h: btnSize};
+        buttons.left = {x: canvas.width - btnSize * 3, y: canvas.height - btnSize * 2, w: btnSize, h: btnSize};
+        buttons.right = {x: canvas.width - btnSize, y: canvas.height - btnSize * 2, w: btnSize, h: btnSize};
+        buttons.attack = {x: btnSize / 2, y: canvas.height - btnSize * 2, w: btnSize, h: btnSize};
+        buttons.restart = {
+            x: canvas.width / 2 - btnSize,
+            y: canvas.height / 2 - btnSize / 2,
+            w: btnSize * 2,
+            h: btnSize
+        };
+    }
+
+    window.addEventListener('resize', resizeCanvas);
+     //resizeCanvas();
 
     const TILE_SIZE = 32;
     const MAP_WIDTH = 1920;
