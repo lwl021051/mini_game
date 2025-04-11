@@ -48,7 +48,7 @@
     const joystick = {
         baseX: 0,
         baseY: 0,
-        radius: 75, // Increased outer radius size
+        radius: 75, // Outer joystick radius
         knobX: 0,
         knobY: 0,
         active: false,
@@ -174,9 +174,11 @@
         const dy = joystick.knobY - joystick.baseY;
         const angle = Math.atan2(dy, dx);
 
-        if (Math.abs(dx) > joystick.radius || Math.abs(dy) > joystick.radius) {
-            player.x += Math.cos(angle) * player.speed;
-            player.y += Math.sin(angle) * player.speed;
+        // Move player based on joystick direction
+        if (Math.abs(dx) > 0 || Math.abs(dy) > 0) {
+            const movement = Math.min(Math.sqrt(dx * dx + dy * dy), joystick.radius); // Limit movement to the joystick range
+            player.x += Math.cos(angle) * player.speed * (movement / joystick.radius); // Movement proportionate to joystick range
+            player.y += Math.sin(angle) * player.speed * (movement / joystick.radius); // Movement proportionate to joystick range
             moved = true;
         }
 
@@ -241,7 +243,7 @@
     function drawJoystick() {
         if (!joystick.active) return;
         ctx.beginPath();
-        ctx.arc(joystick.baseX, joystick.baseY, joystick.radius * 1.5, 0, Math.PI * 2); // Increased outer radius by 1.5
+        ctx.arc(joystick.baseX, joystick.baseY, joystick.radius, 0, Math.PI * 2); // Reduced joystick radius to original size
         ctx.fillStyle = "rgba(255,255,255,0.2)";
         ctx.fill();
         ctx.beginPath();
@@ -338,12 +340,8 @@
     canvas.addEventListener('touchmove', e => {
         for (const touch of e.touches) {
             if (touch.identifier === joystick.touchId) {
-                const dx = touch.clientX - joystick.baseX;
-                const dy = touch.clientY - joystick.baseY;
-                const dist = Math.min(Math.sqrt(dx * dx + dy * dy), joystick.radius * 2);
-                const angle = Math.atan2(dy, dx);
-                joystick.knobX = joystick.baseX + Math.cos(angle) * dist;
-                joystick.knobY = joystick.baseY + Math.sin(angle) * dist;
+                joystick.knobX = touch.clientX;
+                joystick.knobY = touch.clientY;
             }
         }
     });
@@ -351,30 +349,20 @@
         for (const touch of e.changedTouches) {
             if (touch.identifier === joystick.touchId) {
                 joystick.active = false;
-                joystick.touchId = null;
-                joystick.knobX = joystick.baseX;
-                joystick.knobY = joystick.baseY;
             }
         }
     });
 
-    function handleClick(e, isMouseDown = false) {
+    function handleClick(e, isTouch = false) {
         const rect = canvas.getBoundingClientRect();
-        const x = e.clientX - rect.left;
-        const y = e.clientY - rect.top;
+        const x = isTouch ? e.touches[0].clientX - rect.left : e.clientX - rect.left;
+        const y = isTouch ? e.touches[0].clientY - rect.top : e.clientY - rect.top;
 
-        for (let name in buttons) {
-            const btn = buttons[name];
-            if (x >= btn.x && x <= btn.x + btn.w && y >= btn.y && y <= btn.y + btn.h) {
-                if (name === 'restart') restartGame();
-                else if (btn.key === 'k') fireSand();
-                else if (btn.key) {
-                    keys[btn.key] = true;
-                    if (!isMouseDown) setTimeout(() => {
-                        keys[btn.key] = false;
-                    }, 200);
-                }
-            }
+        if (buttons.attack.x < x && x < buttons.attack.x + buttons.attack.w && buttons.attack.y < y && y < buttons.attack.y + buttons.attack.h) {
+            fireSand();
+        }
+        if (buttons.restart.x < x && x < buttons.restart.x + buttons.restart.w && buttons.restart.y < y && y < buttons.restart.y + buttons.restart.h) {
+            restartGame();
         }
     }
 
