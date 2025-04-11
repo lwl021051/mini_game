@@ -1,116 +1,331 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <title>Canvas Game</title>
-  <style>
-    html, body {
-      margin: 0;
-      padding: 0;
-      overflow: hidden;
-      height: 100%;
-      background: #000;
-    }
-    canvas {
-      display: block;
-      touch-action: none;
-    }
-  </style>
+    <meta charset="UTF-8">
+    <title>Pixel RPG Game</title>
+    <style>
+        canvas {
+            background: #222;
+            display: block;
+            margin: auto;
+            image-rendering: pixelated;
+        }
+    </style>
 </head>
 <body>
-<canvas id="gameCanvas"></canvas>
+<canvas id="gameCanvas" width="400" height="400"></canvas>
+
 <script>
-const canvas = document.getElementById("gameCanvas");
-const ctx = canvas.getContext("2d");
+    const canvas = document.getElementById('gameCanvas');
+    const ctx = canvas.getContext('2d');
 
-// 自動調整畫面大小
-function resizeCanvas() {
-  canvas.width = window.innerWidth;
-  canvas.height = window.innerHeight;
-}
-resizeCanvas();
-window.addEventListener('resize', resizeCanvas);
+    const TILE_SIZE = 32;
+    const MAP_WIDTH = 1920;
+    const MAP_HEIGHT = 1920;
+    const VIEW_WIDTH = canvas.width;
+    const VIEW_HEIGHT = canvas.height;
 
-// 模擬按鈕區塊資料（以百分比計算位置）
-const buttons = {
-  up:    {px: 0.1, py: 0.7, w: 60, h: 60, key: 'w'},
-  down:  {px: 0.1, py: 0.85, w: 60, h: 60, key: 's'},
-  left:  {px: 0.02, py: 0.775, w: 60, h: 60, key: 'a'},
-  right: {px: 0.18, py: 0.775, w: 60, h: 60, key: 'd'},
-  attack:{px: 0.85, py: 0.775, w: 70, h: 70, key: 'k'},
-};
+    const chickenWalk = new Image();
+    chickenWalk.src = 'chicken_walk.png';
 
-const keys = {};
+    const npcImage = new Image();
+    npcImage.src = 'npc_image.png';
 
-function getButtonRect(btn) {
-  return {
-    x: btn.px * canvas.width,
-    y: btn.py * canvas.height,
-    w: btn.w,
-    h: btn.h
-  };
-}
+    const SPRITE_FRAME_WIDTH = 32;
+    const SPRITE_FRAME_HEIGHT = 32;
+    const FRAMES_PER_DIRECTION = 4;
 
-// 繪製按鈕
-function drawButtons() {
-  ctx.font = "bold 24px sans-serif";
-  ctx.textAlign = "center";
-  ctx.textBaseline = "middle";
-  for (const name in buttons) {
-    const btn = getButtonRect(buttons[name]);
-    ctx.fillStyle = "#555";
-    ctx.fillRect(btn.x, btn.y, btn.w, btn.h);
-    ctx.fillStyle = "#fff";
-    ctx.fillText(
-      name === "attack" ? "🔥" : name.toUpperCase()[0],
-      btn.x + btn.w / 2,
-      btn.y + btn.h / 2
-    );
-  }
-}
-
-// 觸控事件處理
-function handleTouch(e) {
-  e.preventDefault();
-  const rect = canvas.getBoundingClientRect();
-  const touches = e.touches || [{clientX: e.clientX, clientY: e.clientY}];
-
-  for (const name in buttons) {
-    const btn = getButtonRect(buttons[name]);
-    for (const touch of touches) {
-      const x = touch.clientX - rect.left;
-      const y = touch.clientY - rect.top;
-      if (x >= btn.x && x <= btn.x + btn.w && y >= btn.y && y <= btn.y + btn.h) {
-        keys[buttons[name].key] = true;
-      }
+    function createNPC() {
+        return {
+            x: Math.random() * MAP_WIDTH,
+            y: Math.random() * MAP_HEIGHT,
+            frame: 0,
+            frameTick: 0,
+            direction: 'down',
+            health: 1
+        };
     }
-  }
-}
-function handleTouchEnd() {
-  for (const name in buttons) {
-    keys[buttons[name].key] = false;
-  }
-}
 
-canvas.addEventListener("touchstart", handleTouch);
-canvas.addEventListener("mousedown", handleTouch);
-canvas.addEventListener("touchend", handleTouchEnd);
-canvas.addEventListener("mouseup", handleTouchEnd);
+    let player = {
+        x: 400,
+        y: 400,
+        width: 32,
+        height: 32,
+        isAttacking: false,
+        speed: 2,
+        direction: 'down',
+        frame: 0,
+        frameTick: 0,
+        health: 3
+    };
 
-// 模擬遊戲更新/渲染
-function gameLoop() {
-  ctx.clearRect(0, 0, canvas.width, canvas.height);
+    const sandSpeed = 4;
+    const fireCooldown = 200;
+    let lastFireTime = 0;
+    const sands = [];
 
-  // 假裝一個角色反應 key 狀態
-  ctx.fillStyle = "white";
-  ctx.font = "20px sans-serif";
-  ctx.fillText("Pressed: " + Object.keys(keys).filter(k => keys[k]).join(", "), 20, 40);
+    let npcs = [];
+    let npcBaseSpeed = 0.5;
+    let npcSpeed = npcBaseSpeed;
 
-  drawButtons();
-  requestAnimationFrame(gameLoop);
-}
+    let killCount = 0;
 
-gameLoop();
+    const keys = {};
+
+    window.addEventListener('keydown', e => keys[e.key.toLowerCase()] = true);
+    window.addEventListener('keyup', e => keys[e.key.toLowerCase()] = false);
+
+    const directions = { down: 2, left: 1, up: 0, right: 3 };
+
+    function fireSand() {
+        const now = Date.now();
+        if (now - lastFireTime > fireCooldown) {
+            lastFireTime = now;
+            let dx = 0, dy = 0;
+            if (player.direction === 'up') dy = -1;
+            if (player.direction === 'down') dy = 1;
+            if (player.direction === 'left') dx = -1;
+            if (player.direction === 'right') dx = 1;
+
+            sands.push({
+                x: player.x + player.width / 2 - 4,
+                y: player.y + player.height / 2 - 4,
+                dx, dy,
+                distance: 0,
+                explosion: false,
+                explosionTick: 0
+            });
+
+            player.isAttacking = true;
+            setTimeout(() => player.isAttacking = false, 200);
+        }
+    }
+
+    function update() {
+        if (player.health <= 0) return;
+
+        let moved = false;
+        if (keys['w']) {
+            player.y -= player.speed;
+            player.direction = 'up';
+            moved = true;
+        }
+        if (keys['s']) {
+            player.y += player.speed;
+            player.direction = 'down';
+            moved = true;
+        }
+        if (keys['a']) {
+            player.x -= player.speed;
+            player.direction = 'left';
+            moved = true;
+        }
+        if (keys['d']) {
+            player.x += player.speed;
+            player.direction = 'right';
+            moved = true;
+        }
+
+        if (moved) {
+            player.frameTick++;
+            if (player.frameTick % 10 === 0) player.frame = (player.frame + 1) % FRAMES_PER_DIRECTION;
+        } else {
+            player.frame = 0;
+        }
+
+        player.x = Math.max(0, Math.min(MAP_WIDTH - TILE_SIZE, player.x));
+        player.y = Math.max(0, Math.min(MAP_HEIGHT - TILE_SIZE, player.y));
+
+        sands.forEach((sand, i) => {
+            if (!sand.explosion) {
+                sand.x += sand.dx * sandSpeed;
+                sand.y += sand.dy * sandSpeed;
+                sand.distance += sandSpeed;
+
+                for (let j = 0; j < npcs.length; j++) {
+                    const npc = npcs[j];
+                    if (Math.abs(sand.x - npc.x) < TILE_SIZE && Math.abs(sand.y - npc.y) < TILE_SIZE) {
+                        npcs.splice(j, 1);
+                        sand.explosion = true;
+                        sand.explosionTick = 10;
+                        killCount++;
+                        npcs.push(createNPC());
+                        break;
+                    }
+                }
+
+                if (sand.distance > TILE_SIZE * 10) {
+                    sands.splice(i, 1);
+                }
+            } else {
+                sand.explosionTick--;
+                if (sand.explosionTick <= 0) sands.splice(i, 1);
+            }
+        });
+
+        npcs.forEach((npc, i) => {
+            let dx = player.x - npc.x;
+            let dy = player.y - npc.y;
+            let direction = '';
+
+            if (Math.abs(dx) > Math.abs(dy)) {
+                if (dx > 0) { npc.x += npcSpeed; direction = 'right'; }
+                else { npc.x -= npcSpeed; direction = 'left'; }
+            } else {
+                if (dy > 0) { npc.y += npcSpeed; direction = 'down'; }
+                else { npc.y -= npcSpeed; direction = 'up'; }
+            }
+
+            npc.direction = direction;
+
+            npc.frameTick++;
+            if (npc.frameTick % 10 === 0) npc.frame = (npc.frame + 1) % FRAMES_PER_DIRECTION;
+
+            if (Math.abs(npc.x - player.x) < TILE_SIZE && Math.abs(npc.y - player.y) < TILE_SIZE) {
+                player.health -= 1;
+                npcs.splice(i, 1);
+                npcs.push(createNPC());
+            }
+        });
+    }
+
+    const buttons = {
+        up: { x: 50, y: 300, w: 40, h: 40, key: 'w' },
+        down: { x: 50, y: 360, w: 40, h: 40, key: 's' },
+        left: { x: 10, y: 330, w: 40, h: 40, key: 'a' },
+        right: { x: 90, y: 330, w: 40, h: 40, key: 'd' },
+        attack: { x: 320, y: 330, w: 60, h: 40, key: 'k' },
+        restart: { x: 140, y: 180, w: 120, h: 40 }
+    };
+
+    canvas.addEventListener('mousedown', handleClick);
+    canvas.addEventListener('touchstart', (e) => {
+        e.preventDefault();
+        const rect = canvas.getBoundingClientRect();
+        const touch = e.touches[0];
+        handleClick({ clientX: touch.clientX, clientY: touch.clientY });
+    }, { passive: false });
+
+    function handleClick(e) {
+        const rect = canvas.getBoundingClientRect();
+        const x = e.clientX - rect.left;
+        const y = e.clientY - rect.top;
+
+        for (let name in buttons) {
+            const btn = buttons[name];
+            if (x >= btn.x && x <= btn.x + btn.w && y >= btn.y && y <= btn.y + btn.h) {
+                if (name === 'restart') {
+                    restartGame();
+                } else if (btn.key === 'k') {
+                    fireSand();
+                } else {
+                    keys[btn.key] = true;
+                    setTimeout(() => keys[btn.key] = false, 200);
+                }
+            }
+        }
+    }
+
+    function draw() {
+        const camX = Math.max(0, Math.min(player.x - VIEW_WIDTH / 2, MAP_WIDTH - VIEW_WIDTH));
+        const camY = Math.max(0, Math.min(player.y - VIEW_HEIGHT / 2, MAP_HEIGHT - VIEW_HEIGHT));
+
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+        for (let y = 0; y < MAP_HEIGHT / TILE_SIZE; y++) {
+            for (let x = 0; x < MAP_WIDTH / TILE_SIZE; x++) {
+                ctx.fillStyle = (x + y) % 2 === 0 ? '#2e2e2e' : '#393939';
+                ctx.fillRect(x * TILE_SIZE - camX, y * TILE_SIZE - camY, TILE_SIZE, TILE_SIZE);
+            }
+        }
+
+        const frameX = player.frame * SPRITE_FRAME_WIDTH;
+        const frameY = directions[player.direction] * SPRITE_FRAME_HEIGHT;
+
+        ctx.drawImage(chickenWalk, frameX, frameY, SPRITE_FRAME_WIDTH, SPRITE_FRAME_HEIGHT,
+            player.x - camX, player.y - camY, player.width, player.height);
+
+        sands.forEach(sand => {
+            if (!sand.explosion) {
+                ctx.fillStyle = 'yellow';
+                ctx.fillRect(sand.x - camX, sand.y - camY, 8, 8);
+            } else {
+                ctx.fillStyle = 'orange';
+                ctx.beginPath();
+                ctx.arc(sand.x - camX + 4, sand.y - camY + 4, 12, 0, 2 * Math.PI);
+                ctx.fill();
+            }
+        });
+
+        npcs.forEach(npc => {
+            const frameX = npc.frame * SPRITE_FRAME_WIDTH;
+            const frameY = directions[npc.direction] * SPRITE_FRAME_HEIGHT;
+
+            ctx.drawImage(npcImage, frameX, frameY, SPRITE_FRAME_WIDTH, SPRITE_FRAME_HEIGHT,
+                npc.x - camX, npc.y - camY, TILE_SIZE, TILE_SIZE);
+        });
+
+        ctx.fillStyle = 'red';
+        ctx.fillRect(player.x - camX, player.y - camY - 10, 30, 5);
+        ctx.fillStyle = 'green';
+        ctx.fillRect(player.x - camX, player.y - camY - 10, player.health * 10, 5);
+
+        ctx.fillStyle = 'white';
+        ctx.font = '16px sans-serif';
+        ctx.fillText('Kills: ' + killCount, 10, 20);
+
+        drawControls();
+    }
+
+    function drawControls() {
+        ctx.globalAlpha = 0.6;
+        ctx.fillStyle = '#888';
+        for (let name in buttons) {
+            const b = buttons[name];
+            ctx.fillRect(b.x, b.y, b.w, b.h);
+            ctx.fillStyle = '#fff';
+            ctx.font = '16px sans-serif';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(name === 'restart' ? 'Restart' : name, b.x + b.w / 2, b.y + b.h / 2);
+            ctx.fillStyle = '#888';
+        }
+        ctx.globalAlpha = 1;
+    }
+
+    function restartGame() {
+        player = {
+            x: 400,
+            y: 400,
+            width: 32,
+            height: 32,
+            isAttacking: false,
+            speed: 2,
+            direction: 'down',
+            frame: 0,
+            frameTick: 0,
+            health: 3
+        };
+        sands.length = 0;
+        npcs = [];
+        killCount = 0;
+
+        for (let i = 0; i < 20; i++) {
+            npcs.push(createNPC());
+        }
+    }
+
+    function gameLoop() {
+        update();
+        draw();
+        requestAnimationFrame(gameLoop);
+    }
+
+    for (let i = 0; i < 20; i++) {
+        npcs.push(createNPC());
+    }
+
+    gameLoop();
 </script>
 </body>
 </html>
