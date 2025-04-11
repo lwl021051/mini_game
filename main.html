@@ -48,7 +48,7 @@
     const joystick = {
         baseX: 0,
         baseY: 0,
-        radius: 50,
+        radius: 75, // Increased outer radius size
         knobX: 0,
         knobY: 0,
         active: false,
@@ -56,8 +56,8 @@
     };
 
     const buttons = {
-        attack: { x: canvas.width - 80, y: canvas.height - 80, w: 60, h: 60, key: 'k' },
-        restart: { x: canvas.width / 2 - 60, y: canvas.height / 2 - 30, w: 120, h: 60, key: null }
+        attack: {x: canvas.width - 80, y: canvas.height - 80, w: 60, h: 60, key: 'k'},
+        restart: {x: canvas.width / 2 - 60, y: canvas.height / 2 - 30, w: 120, h: 60, key: null}
     };
 
     function resizeCanvas() {
@@ -72,14 +72,26 @@
         joystick.knobY = joystick.baseY;
 
         const btnSize = Math.min(canvas.width, canvas.height) / 8;
-        buttons.attack = { x: canvas.width - btnSize * 2, y: canvas.height - btnSize * 2, w: btnSize, h: btnSize, key: 'k' };
-        buttons.restart = { x: canvas.width / 2 - btnSize, y: canvas.height / 2 - btnSize / 2, w: btnSize * 2, h: btnSize, key: null };
+        buttons.attack = {
+            x: canvas.width - btnSize * 2,
+            y: canvas.height - btnSize * 2,
+            w: btnSize,
+            h: btnSize,
+            key: 'k'
+        };
+        buttons.restart = {
+            x: canvas.width / 2 - btnSize,
+            y: canvas.height / 2 - btnSize / 2,
+            w: btnSize * 2,
+            h: btnSize,
+            key: null
+        };
     }
 
     window.addEventListener('resize', resizeCanvas);
     resizeCanvas();
 
-    const directions = { down: 2, left: 1, up: 0, right: 3 };
+    const directions = {down: 2, left: 1, up: 0, right: 3};
     const keys = {};
     const sands = [];
     const npcs = [];
@@ -126,16 +138,21 @@
         const now = Date.now();
         if (now - lastFireTime > fireCooldown) {
             lastFireTime = now;
-            let dx = 0, dy = 0;
-            if (player.direction === 'up') dy = -1;
-            if (player.direction === 'down') dy = 1;
-            if (player.direction === 'left') dx = -1;
-            if (player.direction === 'right') dx = 1;
+            const dx = joystick.knobX - joystick.baseX;
+            const dy = joystick.knobY - joystick.baseY;
+
+            let angle = Math.atan2(dy, dx);
+            if (Math.abs(dx) > Math.abs(dy)) {
+                angle = dx > 0 ? Math.PI / 2 : -Math.PI / 2;
+            } else {
+                angle = dy > 0 ? Math.PI : 0;
+            }
 
             sands.push({
                 x: player.x + player.width / 2 - 4,
                 y: player.y + player.height / 2 - 4,
-                dx, dy,
+                dx: Math.cos(angle),
+                dy: Math.sin(angle),
                 distance: 0,
                 explosion: false,
                 explosionTick: 0
@@ -153,10 +170,15 @@
         }
 
         let moved = false;
-        if (keys['w']) { player.y -= player.speed; player.direction = 'up'; moved = true; }
-        if (keys['s']) { player.y += player.speed; player.direction = 'down'; moved = true; }
-        if (keys['a']) { player.x -= player.speed; player.direction = 'left'; moved = true; }
-        if (keys['d']) { player.x += player.speed; player.direction = 'right'; moved = true; }
+        const dx = joystick.knobX - joystick.baseX;
+        const dy = joystick.knobY - joystick.baseY;
+        const angle = Math.atan2(dy, dx);
+
+        if (Math.abs(dx) > joystick.radius || Math.abs(dy) > joystick.radius) {
+            player.x += Math.cos(angle) * player.speed;
+            player.y += Math.sin(angle) * player.speed;
+            moved = true;
+        }
 
         if (moved) {
             player.frameTick++;
@@ -219,7 +241,7 @@
     function drawJoystick() {
         if (!joystick.active) return;
         ctx.beginPath();
-        ctx.arc(joystick.baseX, joystick.baseY, joystick.radius, 0, Math.PI * 2);
+        ctx.arc(joystick.baseX, joystick.baseY, joystick.radius * 1.5, 0, Math.PI * 2); // Increased outer radius by 1.5
         ctx.fillStyle = "rgba(255,255,255,0.2)";
         ctx.fill();
         ctx.beginPath();
@@ -298,7 +320,9 @@
     }
 
     canvas.addEventListener('mousedown', e => handleClick(e, true));
-    canvas.addEventListener('mouseup', () => { for (let key in keys) keys[key] = false; });
+    canvas.addEventListener('mouseup', () => {
+        for (let key in keys) keys[key] = false;
+    });
     canvas.addEventListener('touchstart', e => {
         for (const touch of e.touches) {
             const dx = touch.clientX - joystick.baseX;
@@ -316,12 +340,10 @@
             if (touch.identifier === joystick.touchId) {
                 const dx = touch.clientX - joystick.baseX;
                 const dy = touch.clientY - joystick.baseY;
-                const dist = Math.min(Math.sqrt(dx * dx + dy * dy), joystick.radius);
+                const dist = Math.min(Math.sqrt(dx * dx + dy * dy), joystick.radius * 2);
                 const angle = Math.atan2(dy, dx);
                 joystick.knobX = joystick.baseX + Math.cos(angle) * dist;
                 joystick.knobY = joystick.baseY + Math.sin(angle) * dist;
-                player.x += Math.cos(angle) * player.speed;
-                player.y += Math.sin(angle) * player.speed;
             }
         }
     });
@@ -348,16 +370,17 @@
                 else if (btn.key === 'k') fireSand();
                 else if (btn.key) {
                     keys[btn.key] = true;
-                    if (!isMouseDown) setTimeout(() => keys[btn.key] = false, 200);
+                    if (!isMouseDown) setTimeout(() => {
+                        keys[btn.key] = false;
+                    }, 200);
                 }
             }
         }
     }
 
-    window.addEventListener('keydown', e => keys[e.key.toLowerCase()] = true);
-    window.addEventListener('keyup', e => keys[e.key.toLowerCase()] = false);
-
     function gameLoop() {
+        if (gameOver) return;
+
         update();
         draw();
         requestAnimationFrame(gameLoop);
