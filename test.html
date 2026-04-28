@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Shoalter 订单查询工具</title>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 20px; background: #f9f9f9; }
+    h1 { color: #0066cc; }
+    label { display: block; margin: 12px 0 6px; font-weight: bold; }
+    input, textarea { 
+      width: 100%; 
+      padding: 10px; 
+      border: 1px solid #ccc; 
+      border-radius: 6px; 
+      box-sizing: border-box; 
+    }
+    textarea { font-family: monospace; font-size: 14px; }
+    button { 
+      padding: 12px 24px; 
+      font-size: 16px; 
+      background: #0066cc; 
+      color: white; 
+      border: none; 
+      border-radius: 6px; 
+      cursor: pointer; 
+      margin: 15px 8px 15px 0;
+    }
+    button:hover { background: #0055aa; }
+    button:disabled { background: #888; cursor: not-allowed; }
+    .status { 
+      padding: 12px; 
+      margin: 15px 0; 
+      border-radius: 6px; 
+      font-weight: bold; 
+    }
+    .success { background: #d4edda; color: #155724; }
+    .error { background: #f8d7da; color: #721c24; }
+    pre { 
+      background: #f4f4f4; 
+      padding: 15px; 
+      border-radius: 6px; 
+      overflow: auto; 
+      max-height: 600px; 
+      white-space: pre-wrap;
+    }
+  </style>
+</head>
+<body>
+  <h1>Shoalter 订单查询工具</h1>
+
+  <label>x-auth-token <small>(已填入最新 token)</small></label>
+  <textarea id="token" rows="4"></textarea>
+
+  <label>storeCode</label>
+  <input type="text" id="storeCode" value="H7627001">
+
+  <h2>查询条件</h2>
+  
+  <label>orderDateStart</label>
+  <input type="text" id="orderDateStart" value="2026-03-29 00:00:00">
+
+  <label>orderDateEnd</label>
+  <input type="text" id="orderDateEnd" value="2026-04-29 00:00:00">
+
+  <label>pickupDateStart</label>
+  <input type="text" id="pickupDateStart" value="2026-04-28 00:00:00">
+
+  <label>pickupDateEnd</label>
+  <input type="text" id="pickupDateEnd" value="2026-04-29 00:00:00">
+
+  <button onclick="startProcess()" id="btn">🚀 开始获取订单详情</button>
+
+  <div class="status" id="status">Token 已验证可用 ✅</div>
+
+  <div>
+    <h2>最终结果（successList）</h2>
+    <pre id="finalResult">点击按钮后会显示可导入系统的订单详情...</pre>
+  </div>
+
+  <button onclick="copyResult()" style="background:#28a745;">📋 复制结果</button>
+
+  <script>
+    // Your new token (already filled)
+    const defaultToken = "eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJzaG9hbHRlciIsIm5hbWUiOiJzaG9hbHRlciIsImlhdCI6MTc3NzM0NTc4NiwieC1hcGkta2V5IjoiNmFjNjkzYjQtZDdkYi00MDQwLWE5NGEtYjMwNTJhM2ZmYjYyIn0.bGWwDhSDyAxLDs0Bqt5udxZrV48J8R0xNfo44QML3v_YVJGWSOr1XoNDwWnaCgSymweQUv8q5R4vA2KXVebTnTz8DGJkN5BDEKa_Nj4ZUUe2DN7KnxemXVu_jEUkkGXw72uTNoZLcd1z9rkbcggSsERDMvQnB0xSbDMxVSdTgC8fFhe_rEczhjt3isMEZjeV685TE1I7Uhoo8o3pTO-5WJLoEcVgO2d1sGFnaxpbZrcE0ThodqaFfHZDt5kPzKN9UKTvWzzwcxw2hL43RxNAkDbmRIjUvdF0FlQkIL7oGIJD8n6jze7z8aiLlA001kBAT25GoD14aBJaFblfW-BJSw";
+
+    window.onload = () => {
+      document.getElementById('token').value = defaultToken;
+    };
+
+    async function startProcess() {
+      const btn = document.getElementById('btn');
+      const status = document.getElementById('status');
+      const finalResult = document.getElementById('finalResult');
+
+      btn.disabled = true;
+      status.textContent = "正在请求订单列表...";
+      status.className = "status";
+
+      try {
+        const listRes = await fetch('https://merchant-oapi.shoalter.com/oapi/api/order/orders', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'x-auth-token': document.getElementById('token').value.trim(),
+            'storeCode': document.getElementById('storeCode').value.trim(),
+            'platformCode': 'HKTV',
+            'businessType': 'eCommerce'
+          },
+          body: JSON.stringify({
+            orderDateStart: document.getElementById('orderDateStart').value.trim(),
+            orderDateEnd: document.getElementById('orderDateEnd').value.trim(),
+            pickupDateStart: document.getElementById('pickupDateStart').value.trim(),
+            pickupDateEnd: document.getElementById('pickupDateEnd').value.trim(),
+            page: 1,
+            pageSize: 500
+          })
+        });
+
+        const listData = await listRes.json();
+
+        if (!listRes.ok || listData.code !== "success") {
+          throw new Error(listData.message || "获取订单列表失败");
+        }
+
+        const subOrders = listData.data?.subOrderNumbersd || [];
+        status.textContent = `找到 ${subOrders.length} 个子订单，正在获取详情...`;
+
+        const detailRes = await fetch('https://merchant-oapi.shoalter.com/oapi/api/order/details', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'x-auth-token': document.getElementById('token').value.trim(),
+            'storeCode': document.getElementById('storeCode').value.trim(),
+            'platformCode': 'HKTV',
+            'businessType': 'eCommerce'
+          },
+          body: JSON.stringify({ subOrderNumbers: subOrders })
+        });
+
+        const detailData = await detailRes.json();
+
+        if (!detailRes.ok || detailData.code !== "success") {
+          throw new Error(detailData.message || "获取订单详情失败");
+        }
+
+        const successList = detailData.data?.successList || [];
+
+        status.textContent = `✅ 成功！共获取 ${successList.length} 条订单详情`;
+        status.className = "status success";
+        finalResult.textContent = JSON.stringify(successList, null, 2);
+
+      } catch (err) {
+        status.textContent = `❌ 请求失败: ${err.message}`;
+        status.className = "status error";
+        finalResult.textContent = "错误: " + err.message;
+      } finally {
+        btn.disabled = false;
+      }
+    }
+
+    function copyResult() {
+      const text = document.getElementById('finalResult').textContent;
+      navigator.clipboard.writeText(text).then(() => alert("✅ 已复制到剪贴板！"));
+    }
+  </script>
+</body>
+</html>
